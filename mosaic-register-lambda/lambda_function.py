@@ -79,7 +79,6 @@ def lambda_handler(event, context):
 
     # GOOD, タイムゾーンを指定している．早い
 
-    timestamp = created_on.timestamp()
     created_on_str = created_on.strftime('%Y-%m-%d %H:%M:%S')
     postimg_name = []
     postid = str(uuid.uuid4())

@@ -78,7 +78,6 @@ def lambda_handler(event, context):
     imglist = eventbody['img']
 
     # GOOD, タイムゾーンを指定している．早い
-    created_on = datetime.now(JST)
     timestamp = created_on.timestamp()
     created_on_str = created_on.strftime('%Y-%m-%d %H:%M:%S')
     postimg_name = []
