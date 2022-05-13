@@ -84,8 +84,6 @@ def lambda_handler(event, context):
     postimg_name = []
     postid = str(uuid.uuid4())
     for i, img in enumerate(imglist):
-        ext = guess_extension(img.split(";")[0].split(":")[1])
-        encode = base64.b64decode(img.split(",")[-1].encode("UTF-8"))
         encode_file = '/tmp/tmp' + ext
         with open(encode_file, "wb") as f:
             f.write(encode)
