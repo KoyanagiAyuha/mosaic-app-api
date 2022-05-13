@@ -679,7 +679,7 @@ Resources:
   LambdaExecutionRoleForRegister:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${Sysname}-${Env}-Register-function-execution-role
+      RoleName: !Sub ${Sysname}-${Env}-register-function-execution-role
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -689,7 +689,7 @@ Resources:
                 - lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: !Sub ${Sysname}-${Env}-Register-function-policy
+        - PolicyName: !Sub ${Sysname}-${Env}-register-function-policy
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -800,7 +800,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Description: change isRegister flag in dynamoDB
-      FunctionName: !Sub ${Sysname}-${Env}-Register-function
+      FunctionName: !Sub ${Sysname}-${Env}-register-function
       MemorySize: 128
       Timeout: 900
       Role: !GetAtt
