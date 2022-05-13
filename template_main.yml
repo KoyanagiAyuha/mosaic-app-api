@@ -1,0 +1,981 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Template-for-Road-main-resources
+
+Parameters:
+  Env:
+    Description: Environment type.
+    Type: String
+    AllowedValues: [dev, stg, prod]
+    ConstraintDescription: allowed values dev/stg/prod
+    Default: dev
+  Sysname:
+    Description: System name.
+    Type: String
+    AllowedPattern: "[a-zA-Z0-9-]*"
+    Default: mosaic
+  ProcessImgJobDefImage:
+    Type: String
+    Description: "Image for [{sysname}-{env}-processimg-jobdef],default is hello lambda Image"
+    Default: amazonlinux
+  CognitoArn:
+    Type: String
+    Description: "Cognito Pool Arn,for example arn:aws:cognito-idp:eu-central-1:597775291172:userpool/eu-central-1_ofxv8UlMK"
+
+Resources:
+  ############### VPC ###############
+  # main vpc
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: !Sub ${Sysname}-${Env}-vpc
+
+  ############### Subnet ###############
+  #private subnet1 for batch job container
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.64.0/18
+      VpcId:
+        Ref: VPC
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${Sysname}-${Env}-private-subnet1
+        - Key: Type
+          Value: Isolated
+
+  #private subnet1 for batch job container
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.128.0/18
+      VpcId:
+        Ref: VPC
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${Sysname}-${Env}-private-subnet2
+        - Key: Type
+          Value: Isolated
+
+  #public subnet for call API
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.1.0/24
+      VpcId:
+        Ref: VPC
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${Sysname}-${Env}-public-subnet
+        - Key: Type
+          Value: Public
+
+  ############### Route table  and Accociation ###############
+  # Route table for private subnet
+  RouteTableForPrivateSubnet:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${Sysname}-${Env}-private-rtb
+
+  # association route table and privete subnet
+  RouteAssociationForPrivateSubnet1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: RouteTableForPrivateSubnet
+      SubnetId:
+        Ref: PrivateSubnet1
+
+  # association route table and privete subnet
+  RouteAssociationForPrivateSubnet2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: RouteTableForPrivateSubnet
+      SubnetId:
+        Ref: PrivateSubnet2
+
+  # route table for public subnet
+  RouteTableForPublicSubnet:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${Sysname}-${Env}-public-rtb
+
+  # association route table and public subnet
+  RouteAssociationForPublicSub:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: RouteTableForPublicSubnet
+      SubnetId:
+        Ref: PublicSubnet
+
+  ############### Internet Gateway and attachment to VPC###############
+  # internetgateway for VPC
+  InternetGateWay:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${Sysname}-${Env}-igw
+
+  # attachment to vpc
+  VPCGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: InternetGateWay
+
+  # default route for
+  RouteDefaultForPublic:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: RouteTableForPublicSubnet
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateWay
+    DependsOn:
+      - VPCGWAttachment
+
+  ############### Security groups ###############
+  # security group for call API
+  SgForCallAPI:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for call API
+      GroupName: callapi
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      Tags:
+        - Key: Name
+          Value: !Sub ${Sysname}-${Env}-callapi-sg
+      VpcId:
+        Ref: VPC
+
+  # security group for batch job container
+  SgForBatchJobContainer:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Batch Job Container
+      GroupName: batchjob
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      Tags:
+        - Key: Name
+          Value: !Sub ${Sysname}-${Env}-batchjob-sg
+      VpcId:
+        Ref: VPC
+
+  # Batch Job Container -> Batch Job Container
+  SgIngressFromBatchJob2BatchJob:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: "-1"
+      Description: allow ingress between Batch Job  Container
+      GroupId:
+        Fn::GetAtt:
+          - SgForBatchJobContainer
+          - GroupId
+      SourceSecurityGroupId:
+        Fn::GetAtt:
+          - SgForBatchJobContainer
+          - GroupId
+
+  #Ingress -> Batch Job Container
+  SgIngressFromcallAPI2BatchJob:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: "-1"
+      Description: allow Ingress to Batch Job Container from apicall
+      GroupId:
+        Fn::GetAtt:
+          - SgForBatchJobContainer
+          - GroupId
+      SourceSecurityGroupId:
+        Fn::GetAtt:
+          - SgForCallAPI
+          - GroupId
+
+  #Batch Job -> CallAPI
+  SgIngressFromBatchJob2CallAPI:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: "-1"
+      Description: allow Ingress to apicall from Batch Job Container
+      GroupId:
+        Fn::GetAtt:
+          - SgForCallAPI
+          - GroupId
+      SourceSecurityGroupId:
+        Fn::GetAtt:
+          - SgForBatchJobContainer
+          - GroupId
+
+  ############# Elastic IP for Nat Gateway ##############
+  ElasticIPForNATGateWay:
+    Type: AWS::EC2::EIP
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${Sysname}-${Env}-eip
+
+  ############# NAT GateWay #############
+  NATGWForCallAPI:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - ElasticIPForNATGateWay
+          - AllocationId
+      ConnectivityType: public
+      SubnetId:
+        Ref: PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub ${Sysname}-${Env}-natgw
+
+  # Routing for NAT GateWay
+  RouteToNATGateWay:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: RouteTableForPrivateSubnet
+      NatGatewayId:
+        Ref: NATGWForCallAPI
+      DestinationCidrBlock: 0.0.0.0/0
+
+  ############  VPC Endpoint ################
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      RouteTableIds:
+        - Ref: RouteTableForPrivateSubnet
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      VpcId:
+        Ref: VPC
+      # Tags:
+      #   - Key: Name
+      #     Value: !Sub ${Sysname}-${Env}-s3-ep
+
+  DynamoDBGatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      RouteTableIds:
+        - Ref: RouteTableForPrivateSubnet
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.dynamodb
+      VpcEndpointType: Gateway
+      VpcId:
+        Ref: VPC
+      # Tags:
+      #   - Key: Name
+      #     Value: !Sub ${Sysname}-${Env}-dynamodb-ep
+
+  ECRAPIInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - Fn::GetAtt:
+            - SgForBatchJobContainer
+            - GroupId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.api
+      SubnetIds:
+        - Ref: PrivateSubnet1
+        - Ref: PrivateSubnet2
+      VpcEndpointType: Interface
+      VpcId:
+        Ref: VPC
+      # Tags:
+      #   - Key: Name
+      #     Value: !Sub ${Sysname}-${Env}-ecr-api-ep
+
+  ECRDKRInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - Fn::GetAtt:
+            - SgForBatchJobContainer
+            - GroupId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.dkr
+      SubnetIds:
+        - Ref: PrivateSubnet1
+        - Ref: PrivateSubnet2
+      VpcEndpointType: Interface
+      VpcId:
+        Ref: VPC
+      # Tags:
+      #   - Key: Name
+      #     Value: !Sub ${Sysname}-${Env}-ecr-dkr-ep
+
+  LogsInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - Fn::GetAtt:
+            - SgForBatchJobContainer
+            - GroupId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
+      SubnetIds:
+        - Ref: PrivateSubnet1
+        - Ref: PrivateSubnet2
+      VpcEndpointType: Interface
+      VpcId:
+        Ref: VPC
+      # Tags:
+      #   - Key: Name
+      #     Value: !Sub ${Sysname}-${Env}-logs-ep
+
+  ######################### S3Bucket #########################
+  #Bucket for raw snapshot
+  S3BucketForRegisterImg:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub ${Sysname}-${Env}-registerimg-${AWS::AccountId}
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  #Bucket for detection result image
+  S3BucketForResultImg:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub ${Sysname}-${Env}-resultimg-${AWS::AccountId}
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  ######################### API Gateway #########################
+  RestAPIForGetImgAndList:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Description: Rest API for get image and List
+      Name: !Sub ${Sysname}-${Env}-api
+
+  Authorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      ProviderARNs:
+        - !Ref CognitoArn
+      AuthorizerResultTtlInSeconds: "300"
+      Type: "COGNITO_USER_POOLS"
+      IdentitySource: "method.request.header.Authorization"
+      Name: "DefaultAuthorizer"
+      RestApiId: !Ref RestAPIForGetImgAndList
+
+  APIGatewayResourceForGetList:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestAPIForGetImgAndList
+      ParentId: !GetAtt
+        - RestAPIForGetImgAndList
+        - RootResourceId
+      PathPart: list
+
+  APIGatewayResourceForGetImg:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestAPIForGetImgAndList
+      ParentId: !GetAtt
+        - RestAPIForGetImgAndList
+        - RootResourceId
+      PathPart: img
+
+  APIGatewayResourceForRegister:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestAPIForGetImgAndList
+      ParentId: !GetAtt
+        - RestAPIForGetImgAndList
+        - RootResourceId
+      PathPart: register
+
+  APIGatewayResourceForMosaic:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestAPIForGetImgAndList
+      ParentId: !GetAtt
+        - RestAPIForGetImgAndList
+        - RootResourceId
+      PathPart: mosaic
+
+  APIGatewayMethodForList:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref Authorizer
+      HttpMethod: POST
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - ResponseTemplates:
+              "application/json": ""
+            StatusCode: 200
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionForGetList.Arn}/invocations
+      ResourceId: !Ref APIGatewayResourceForGetList
+      RestApiId: !Ref RestAPIForGetImgAndList
+
+  APIGatewayMethodForImg:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref Authorizer
+      HttpMethod: POST
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - ResponseTemplates:
+              "application/json": ""
+            StatusCode: 200
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionForGetResultImg.Arn}/invocations
+      ResourceId: !Ref APIGatewayResourceForGetImg
+      RestApiId: !Ref RestAPIForGetImgAndList
+
+  APIGatewayMethodForRegister:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref Authorizer
+      HttpMethod: POST
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - ResponseTemplates:
+              "application/json": ""
+            StatusCode: 200
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionForRegister.Arn}/invocations
+      ResourceId: !Ref APIGatewayResourceForRegister
+      RestApiId: !Ref RestAPIForGetImgAndList
+
+  APIGatewayMethodForMosaic:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref Authorizer
+      HttpMethod: POST
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - ResponseTemplates:
+              "application/json": ""
+            StatusCode: 200
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionForMosaic.Arn}/invocations
+      ResourceId: !Ref APIGatewayResourceForMosaic
+      RestApiId: !Ref RestAPIForGetImgAndList
+
+  #########################  DynamoDB ########################
+  #Table for result of detect
+  DynamoDBForEditPic:
+    Type: "AWS::DynamoDB::Table"
+    DeletionPolicy: Retain
+    Properties:
+      TableName: !Sub ${Sysname}-${Env}-editpic-table
+      AttributeDefinitions:
+        - AttributeName: username
+          AttributeType: S #this means type is String
+        - AttributeName: uuid # index of detection result in a image
+          AttributeType: S #this means type is Number
+      KeySchema:
+        - AttributeName: username
+          KeyType: HASH #this means column is partition(primary) key
+        - AttributeName: uuid
+          KeyType: RANGE #this meanst column is sort key
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  #Table for list data of image
+  DynamoDBForRegisterPic:
+    Type: "AWS::DynamoDB::Table"
+    DeletionPolicy: Retain
+    Properties:
+      TableName: !Sub ${Sysname}-${Env}-registerpic-table
+      AttributeDefinitions:
+        - AttributeName: username
+          AttributeType: S
+        - AttributeName: uuid
+          AttributeType: S
+      KeySchema:
+        - AttributeName: username
+          KeyType: HASH #this means column is partition(primary) key
+        - AttributeName: uuid
+          KeyType: RANGE #this meanst column is sort key
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  ######################### Role for lambda #########################
+  LambdaExecutionRoleForStartBatch:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Sysname}-${Env}-staratbatch-function-execution-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${Sysname}-${Env}-staratbatch-function-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:CreateExportTask
+              - Resource:
+                  - !Sub arn:aws:batch:${AWS::Region}:${AWS::AccountId}:compute-environment/${Sysname}-${Env}-processimg-compenv
+                  - !Sub arn:aws:batch:${AWS::Region}:${AWS::AccountId}:job-definition/${Sysname}-${Env}-processimg-jobdef:*
+                  - !Sub arn:aws:batch:${AWS::Region}:${AWS::AccountId}:job-queue/${Sysname}-${Env}-processimg-JobQueue
+                Effect: Allow
+                Action:
+                  - batch:*
+
+  LambdaExecutionRoleForGetImg:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Sysname}-${Env}-resultimg-function-execution-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${Sysname}-${Env}-resultimg-function-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:CreateExportTask
+              - Resource:
+                  - !GetAtt S3BucketForRegisterImg.Arn
+                  - !GetAtt S3BucketForResultImg.Arn
+                  - !Sub ${S3BucketForRegisterImg.Arn}/*
+                  - !Sub ${S3BucketForResultImg.Arn}/*
+                Effect: Allow
+                Action:
+                  - "s3:*"
+
+  LambdaExecutionRoleForList:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Sysname}-${Env}-list-function-execution-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${Sysname}-${Env}-list-function-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:CreateExportTask
+              - Resource:
+                  - !GetAtt DynamoDBForEditPic.Arn
+                  - !GetAtt DynamoDBForRegisterPic.Arn
+                  - !Sub ${DynamoDBForEditPic.Arn}/*
+                  - !Sub ${DynamoDBForRegisterPic.Arn}/*
+                Effect: Allow
+                Action:
+                  - dynamodb:*
+
+  LambdaExecutionRoleForRegister:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Sysname}-${Env}-Register-function-execution-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${Sysname}-${Env}-Register-function-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:CreateExportTask
+              - Resource:
+                  - !GetAtt DynamoDBForEditPic.Arn
+                  - !Sub ${DynamoDBForEditPic.Arn}/*
+                Effect: Allow
+                Action:
+                  - dynamodb:*
+
+  LambdaExecutionRoleForMosaic:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Sysname}-${Env}-mosaic-function-execution-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${Sysname}-${Env}-mosaic-function-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:CreateExportTask
+              - Resource:
+                  - !GetAtt DynamoDBForEditPic.Arn
+                  - !Sub ${DynamoDBForEditPic.Arn}/*
+                Effect: Allow
+                Action:
+                  - dynamodb:*
+
+  ######################### Lambda function #########################
+  # lambda for get detection result image from S3
+  lambdaFunctionForGetResultImg:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: get detection result image from S3
+      FunctionName: !Sub ${Sysname}-${Env}-resultimg-function
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt
+        - LambdaExecutionRoleForGetImg
+        - Arn
+      Runtime: python3.9
+      Handler: lambda_function.lambda_handler
+      Code:
+        ZipFile: |
+          return "a"
+      TracingConfig:
+        Mode: Active
+
+  #lambda(for get detection result image) permission for api gateway
+  GetImgLambdaPermissionForAPIGateway:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref lambdaFunctionForGetResultImg
+      Action: "lambda:InvokeFunction"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/img
+
+  # lambda for get List from dynamoDB
+  lambdaFunctionForGetList:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: get List from dynamoDB
+      FunctionName: !Sub ${Sysname}-${Env}-list-function
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt
+        - LambdaExecutionRoleForGetImg
+        - Arn
+      Runtime: python3.9
+      Handler: lambda_function.lambda_handler
+      Code:
+        ZipFile: |
+          return "a"
+      TracingConfig:
+        Mode: Active
+
+  #lambda(for get list data) permission for api gateway
+  ListLambdaPermissionForAPIGateway:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref lambdaFunctionForGetList
+      Action: "lambda:InvokeFunction"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/list
+
+  # lambda for change isRegister flag in dynamoDB
+  lambdaFunctionForRegister:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: change isRegister flag in dynamoDB
+      FunctionName: !Sub ${Sysname}-${Env}-Register-function
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt
+        - LambdaExecutionRoleForGetImg
+        - Arn
+      Runtime: python3.9
+      Handler: lambda_function.lambda_handler
+      Code:
+        ZipFile: |
+          return "a"
+      TracingConfig:
+        Mode: Active
+
+  lambdaFunctionForMosaic:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: change Mosaic flag in dynamoDB
+      FunctionName: !Sub ${Sysname}-${Env}-mosaic-function
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt
+        - LambdaExecutionRoleForGetImg
+        - Arn
+      Runtime: python3.9
+      Handler: lambda_function.lambda_handler
+      Code:
+        ZipFile: |
+          return "a"
+      TracingConfig:
+        Mode: Active
+
+  #lambda(for change isRegister flag) permission for api gateway
+  RegisterLambdaPermissionForAPIGateway:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref lambdaFunctionForRegister
+      Action: "lambda:InvokeFunction"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/Register
+
+  #lambda(for change mosaic flag) permission for api gateway
+  MosaicLambdaPermissionForAPIGateway:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref lambdaFunctionForMosaic
+      Action: "lambda:InvokeFunction"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/mosaic
+
+  ############ Role ############
+  ComputeEnvRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub ${Sysname}-${Env}-processimg-compenv-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - batch.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSBatchServiceRole"
+
+  ecsTaskExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub ${Sysname}-${Env}-processimg-jobdef-taskexecution-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  ecsJobRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub ${Sysname}-${Env}-processimg-jobdef-job-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Policies:
+        - PolicyName: !Sub ${Sysname}-${Env}-processimg-jobdef-job-role-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:CreateExportTask
+              - Resource:
+                  - !GetAtt S3BucketForRegisterImg.Arn
+                  - !GetAtt S3BucketForResultImg.Arn
+                  - !Sub ${S3BucketForRegisterImg.Arn}/*
+                  - !Sub ${S3BucketForResultImg.Arn}/*
+                Effect: Allow
+                Action:
+                  - "s3:*"
+              - Resource:
+                  - !GetAtt DynamoDBForEditPic.Arn
+                  - !GetAtt DynamoDBForRegisterPic.Arn
+                  - !Sub ${DynamoDBForEditPic.Arn}/*
+                  - !Sub ${DynamoDBForRegisterPic.Arn}/*
+                Effect: Allow
+                Action:
+                  - dynamodb:*
+
+  ############ Batch ############
+  BatchComputeEnvironment:
+    Type: "AWS::Batch::ComputeEnvironment"
+    Properties:
+      ComputeEnvironmentName: !Sub ${Sysname}-${Env}-processimg-compenv
+      Type: "MANAGED"
+      State: "ENABLED"
+      ServiceRole: !Ref ComputeEnvRole
+      ComputeResources:
+        Type: "FARGATE"
+        MaxvCpus: 250
+        Subnets:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+        SecurityGroupIds:
+          - Fn::GetAtt:
+              - SgForBatchJobContainer
+              - GroupId
+
+  BatchJobDefinition:
+    Type: "AWS::Batch::JobDefinition"
+    Properties:
+      JobDefinitionName: !Sub ${Sysname}-${Env}-processimg-jobdef
+      Type: "container"
+      PlatformCapabilities:
+        - "FARGATE"
+      RetryStrategy:
+        Attempts: 2
+      ContainerProperties:
+        Command:
+          - "sleep"
+          - "1"
+        JobRoleArn: !GetAtt ecsJobRole.Arn
+        Image: !Ref ProcessImgJobDefImage
+        ExecutionRoleArn: !GetAtt ecsTaskExecutionRole.Arn
+        NetworkConfiguration:
+          AssignPublicIp: ENABLED
+        FargatePlatformConfiguration:
+          PlatformVersion: 1.4.0
+        ResourceRequirements:
+          - Type: VCPU
+            Value: 0.5
+          - Type: MEMORY
+            Value: 1024
+
+  BatchJobQueue:
+    Type: "AWS::Batch::JobQueue"
+    Properties:
+      JobQueueName: !Sub ${Sysname}-${Env}-processimg-JobQueue
+      ComputeEnvironmentOrder:
+        - ComputeEnvironment: !Ref BatchComputeEnvironment
+          Order: 1
+      Priority: 1
+      State: "ENABLED"
