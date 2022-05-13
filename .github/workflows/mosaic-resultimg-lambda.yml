@@ -16,7 +16,7 @@ jobs:
           python-version: 3.9
       - run: cd mosaic-resultimage-lambda && pip install -r requirements.txt -t . && zip -r package.zip ./*
       - run: pip3 install awscli
-      - run: cd mosaic-resultimage-lambda && aws lambda update-function-code --function-name mosaic-dev-resultimage-lambda --zip-file fileb://package.zip --publish
+      - run: cd mosaic-resultimage-lambda && aws lambda update-function-code --function-name mosaic-dev-resultimage-function --zip-file fileb://package.zip --publish
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
