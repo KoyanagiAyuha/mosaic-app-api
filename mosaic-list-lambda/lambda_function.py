@@ -41,7 +41,7 @@ def log_decorator():
     return _log_decorator
 
 
-@log_decorator
+@log_decorator()
 def get_list(username):
 
     dynamodb = boto3.resource('dynamodb')
@@ -65,7 +65,7 @@ def get_list(username):
     return data
 
 
-@log_decorator
+@log_decorator()
 def lambda_handler(event, context):
 
     try:
