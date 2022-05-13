@@ -77,9 +77,6 @@ def lambda_handler(event, context):
     title = eventbody["title"]
     imglist = eventbody['img']
 
-    # タイムゾーンの生成
-    JST = timezone(timedelta(hours=+9), 'JST')
-
     # GOOD, タイムゾーンを指定している．早い
     created_on = datetime.now(JST)
     timestamp = created_on.timestamp()
