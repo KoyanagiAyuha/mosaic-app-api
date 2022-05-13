@@ -457,7 +457,7 @@ Resources:
     Properties:
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref Authorizer
-      HttpMethod: POST
+      HttpMethod: GET
       MethodResponses:
         - StatusCode: 200
           ResponseModels:
@@ -538,24 +538,36 @@ Resources:
 
   #########################  DynamoDB ########################
   #Table for result of detect
-  DynamoDBForEditPic:
+  DynamoDBForEditPicture:
     Type: "AWS::DynamoDB::Table"
     DeletionPolicy: Retain
     Properties:
-      TableName: !Sub ${Sysname}-${Env}-editpic-table
+      TableName: !Sub ${Sysname}-${Env}-editpicture-table
       AttributeDefinitions:
         - AttributeName: username
           AttributeType: S #this means type is String
         - AttributeName: uuid # index of detection result in a image
           AttributeType: S #this means type is Number
+        - AttributeName: created_on # index of detection result in a image
+          AttributeType: N #this means type is Number
       KeySchema:
         - AttributeName: username
           KeyType: HASH #this means column is partition(primary) key
-        - AttributeName: uuid
+        - AttributeName: created_on
           KeyType: RANGE #this meanst column is sort key
       ProvisionedThroughput:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
+      GlobalSecondaryIndexes:
+        - IndexName: uuid--index
+          KeySchema:
+            - AttributeName: uuid
+              KeyType: HASH
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+          Projection:
+            ProjectionType: ALL
 
   #Table for list data of image
   DynamoDBForRegisterPic:
@@ -668,9 +680,9 @@ Resources:
                   - logs:PutLogEvents
                   - logs:CreateExportTask
               - Resource:
-                  - !GetAtt DynamoDBForEditPic.Arn
+                  - !GetAtt DynamoDBForEditPicture.Arn
                   - !GetAtt DynamoDBForRegisterPic.Arn
-                  - !Sub ${DynamoDBForEditPic.Arn}/*
+                  - !Sub ${DynamoDBForEditPicture.Arn}/*
                   - !Sub ${DynamoDBForRegisterPic.Arn}/*
                 Effect: Allow
                 Action:
@@ -701,8 +713,8 @@ Resources:
                   - logs:PutLogEvents
                   - logs:CreateExportTask
               - Resource:
-                  - !GetAtt DynamoDBForEditPic.Arn
-                  - !Sub ${DynamoDBForEditPic.Arn}/*
+                  - !GetAtt DynamoDBForEditPicture.Arn
+                  - !Sub ${DynamoDBForEditPicture.Arn}/*
                 Effect: Allow
                 Action:
                   - dynamodb:*
@@ -732,8 +744,8 @@ Resources:
                   - logs:PutLogEvents
                   - logs:CreateExportTask
               - Resource:
-                  - !GetAtt DynamoDBForEditPic.Arn
-                  - !Sub ${DynamoDBForEditPic.Arn}/*
+                  - !GetAtt DynamoDBForEditPicture.Arn
+                  - !Sub ${DynamoDBForEditPicture.Arn}/*
                 Effect: Allow
                 Action:
                   - dynamodb:*
@@ -917,9 +929,9 @@ Resources:
                 Action:
                   - "s3:*"
               - Resource:
-                  - !GetAtt DynamoDBForEditPic.Arn
+                  - !GetAtt DynamoDBForEditPicture.Arn
                   - !GetAtt DynamoDBForRegisterPic.Arn
-                  - !Sub ${DynamoDBForEditPic.Arn}/*
+                  - !Sub ${DynamoDBForEditPicture.Arn}/*
                   - !Sub ${DynamoDBForRegisterPic.Arn}/*
                 Effect: Allow
                 Action:
