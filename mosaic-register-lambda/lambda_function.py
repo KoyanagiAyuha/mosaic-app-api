@@ -80,7 +80,7 @@ def check_limit(username):
 
     response = table.query(KeyConditionExpression=Key('username').eq(username))
 
-    if len(response['items']) < 5:
+    if len(response['Items']) < 5:
         return True
     else:
         return False
