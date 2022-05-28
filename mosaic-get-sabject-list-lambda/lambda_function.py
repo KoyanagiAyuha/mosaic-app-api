@@ -49,7 +49,7 @@ def log_decorator():
 def get_subject_list(username):
 
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(os.environ.get('DB_TABLE'))
+    table = dynamodb.Table(SUBJECT_TABLE_NAME)
 
     response = table.query(KeyConditionExpression=Key('username').eq(username))
 
@@ -63,7 +63,7 @@ def lambda_handler(event, context):
 
     username = event["requestContext"]["authorizer"]["claims"]["cognito:username"]
 
-    subject_list = get_subject_list(username)
+    subject_list = get_subject_list(username)["Items"]
 
     res = {
         'status': 'OK',
