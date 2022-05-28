@@ -1,10 +1,12 @@
-import os
+
 import boto3
-from boto3.dynamodb.conditions import Key
 import logging
 import sys
 import uuid
 import json
+import base64
+from boto3.dynamodb.conditions import Key
+from datetime import datetime, timedelta, timezone
 
 # 既存ロガーハンドラーの削除
 default_logger = logging.getLogger()
@@ -23,6 +25,9 @@ log_format = logging.Formatter("%(levelname)s - %(filename)s - %(funcName)s - %(
 to_stream.setFormatter(log_format)
 # ロガーへハンドラーを追加する
 logger.addHandler(to_stream)
+
+SUBJECT_BUCKET_NAME = 'mosaic-dev-registerimg-597775291172'
+SUBJECT_TABLE_NAME = 'mosaic-dev-registerpic-table'
 
 
 def log_decorator():
@@ -43,29 +48,42 @@ def log_decorator():
     return _log_decorator
 
 
-def put_posts(title, username, imglist, created_on, postid):
+@log_decorator()
+def put_posts(username, created_at, postid, img_title):
 
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(os.environ.get('DB_TABLE'))
+    table = dynamodb.Table(SUBJECT_TABLE_NAME)
 
     table.put_item(
         Item={
-            'userPost': username,
-            'title': title,
-            'img': imglist,
-            'created_on': created_on,
-            'id': postid,
-            'timestamp': ""
+            'username': username,
+            'created_at': created_at,
+            'uuid': postid,
+            'img_title': img_title
         }
     )
 
 
+@log_decorator()
 def post_image(img, key):
 
-    s3 = boto3.resource('s3')
-    bucket = s3.Bucket('mosaic-dev-registerimg-597775291172')
+    s3_client = boto3.client('s3')
+    data = base64.b64decode(img)
 
-    bucket.upload_file(img, key)
+    s3_client.put_object(Bucket=SUBJECT_BUCKET_NAME, Key=key, Body=data)
+
+
+@log_decorator()
+def check_limit(username):
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table(SUBJECT_TABLE_NAME)
+
+    response = table.query(KeyConditionExpression=Key('username').eq(username))
+
+    if len(response['item']) < 5:
+        return True
+    else:
+        return False
 
 
 def lambda_handler(event, context):
@@ -73,26 +91,36 @@ def lambda_handler(event, context):
     username = event["requestContext"]["authorizer"]["claims"]["cognito:username"]
     eventbody = json.loads(event["body"])
 
-    title = eventbody["title"]
-    imglist = eventbody['img']
+    img_title = eventbody["imgTitle"]
+    img = eventbody['img']
 
-    # GOOD, タイムゾーンを指定している．早い
+    # 5未満ならTrue
+    is_continue = check_limit(username)
 
-    created_on_str = created_on.strftime('%Y-%m-%d %H:%M:%S')
-    postimg_name = []
-    postid = str(uuid.uuid4())
-    for i, img in enumerate(imglist):
-        encode_file = '/tmp/tmp' + ext
-        with open(encode_file, "wb") as f:
-            f.write(encode)
-        key = postid + '/' + str(i) + ext
-        postimg_name.append(key)
-        post_image(encode_file, key)
+    if is_continue:
 
-    put_posts(title, username, postimg_name, created_on_str, postid, timestamp)
+        img_id = str(uuid.uuid4())
+        s3_post_key = "{}/{}.jpg".format(username, img_id)
 
-    # TODO implement
-    return {
-        'statusCode': 200,
-        'body': "OK"
-    }
+        # タイムゾーンの生成
+        JST = timezone(timedelta(hours=+9), 'JST')
+
+        # GOOD, タイムゾーンを指定している．早い
+        now = datetime.now(JST)
+        # エポックミリ秒に変換
+        created_at = now.timestamp() * 1000
+
+        post_image(img, s3_post_key)
+
+        put_posts(username, created_at, img_id, img_title)
+
+        # TODO implement
+        return {
+            'statusCode': 200,
+            'body': "OK"
+        }
+    else:
+        return {
+            'statusCode': 200,
+            'body': "NG"
+        }
