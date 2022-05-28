@@ -119,12 +119,13 @@ def lambda_handler(event, context):
             'message': 'Registered successfully'
         }
 
-        return {
-            'statusCode': 200,
-            'body': json.dumps(res)
-        }
     else:
-        return {
-            'statusCode': 200,
-            'body': "NG"
+        res = {
+            'status': 'NG',
+            'message': 'Over regulation'
         }
+
+    return {
+        'statusCode': 200,
+        'body': json.dumps(res)
+    }
