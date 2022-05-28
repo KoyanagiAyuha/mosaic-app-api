@@ -529,7 +529,7 @@ Resources:
     Properties:
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref Authorizer
-      HttpMethod: GET
+      HttpMethod: POST
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST

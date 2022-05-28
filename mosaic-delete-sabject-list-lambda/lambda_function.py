@@ -47,7 +47,7 @@ SUBJECT_BUCKET_NAME = 'mosaic-dev-registerimg-597775291172'
 
 
 @log_decorator()
-def delete_recode(img_id):
+def delete_recode(username, img_id):
 
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(SUBJECT_TABLE_NAME)
@@ -58,7 +58,6 @@ def delete_recode(img_id):
     )['Items']
 
     if len(response) == 1:
-        username = response[0]['username']
         created_at = response[0]['created_at']
 
         table.delete_item(
@@ -88,7 +87,7 @@ def lambda_handler(event, context):
 
     s3_key = "{}/{}.jpg".format(username, img_id)
     delete_image(s3_key)
-    res = delete_recode(img_id)
+    res = delete_recode(username, img_id)
 
     # TODO implement
     return {
