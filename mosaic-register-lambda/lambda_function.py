@@ -108,7 +108,7 @@ def lambda_handler(event, context):
         # GOOD, タイムゾーンを指定している．早い
         now = datetime.now(JST)
         # エポックミリ秒に変換
-        created_at = now.timestamp() * 1000
+        created_at = int(now.timestamp() * 1000)
 
         post_image(img, s3_post_key)
 
