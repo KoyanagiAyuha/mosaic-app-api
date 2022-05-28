@@ -3,6 +3,8 @@ import boto3
 from boto3.dynamodb.conditions import Key
 import logging
 import sys
+from typing import Union
+import traceback
 import json
 
 # 既存ロガーハンドラーの削除
@@ -24,9 +26,6 @@ to_stream.setFormatter(log_format)
 logger.addHandler(to_stream)
 
 
-EDIT_DB_TABLE_NAME = "mosaic-dev-editpicture-table"
-
-
 def log_decorator():
     def _log_decorator(func):
         def wrapper(*args, **kwargs):
@@ -45,14 +44,14 @@ def log_decorator():
     return _log_decorator
 
 
-def db_post(title, username, imglist, created_on, postid):
+def put_posts(title, username, imglist, created_on, postid):
 
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(EDIT_DB_TABLE_NAME)
+    table = dynamodb.Table(os.environ.get('DB_TABLE'))
 
     table.put_item(
         Item={
-            'username': username,
+            'userPost': username,
             'title': title,
             'img': imglist,
             'created_on': created_on,
@@ -76,7 +75,22 @@ def lambda_handler(event, context):
     eventbody = json.loads(event["body"])
 
     title = eventbody["title"]
-    img = eventbody['img']
+    imglist = eventbody['img']
+
+    # GOOD, タイムゾーンを指定している．早い
+    timestamp = created_on.timestamp()
+    created_on_str = created_on.strftime('%Y-%m-%d %H:%M:%S')
+    postimg_name = []
+    postid = str(uuid.uuid4())
+    for i, img in enumerate(imglist):
+        encode_file = '/tmp/tmp' + ext
+        with open(encode_file, "wb") as f:
+            f.write(encode)
+        key = postid + '/' + str(i) + ext
+        postimg_name.append(key)
+        post_image(encode_file, key)
+
+    put_posts(title, username, postimg_name, created_on_str, postid, timestamp)
 
     # TODO implement
     return {

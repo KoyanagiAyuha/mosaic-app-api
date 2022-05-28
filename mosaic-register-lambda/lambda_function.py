@@ -3,8 +3,7 @@ import boto3
 from boto3.dynamodb.conditions import Key
 import logging
 import sys
-from typing import Union
-import traceback
+import uuid
 import json
 
 # 既存ロガーハンドラーの削除
@@ -64,7 +63,7 @@ def put_posts(title, username, imglist, created_on, postid):
 def post_image(img, key):
 
     s3 = boto3.resource('s3')
-    bucket = s3.Bucket(os.environ.get('DB_TABLE'))
+    bucket = s3.Bucket('mosaic-dev-registerimg-597775291172')
 
     bucket.upload_file(img, key)
 

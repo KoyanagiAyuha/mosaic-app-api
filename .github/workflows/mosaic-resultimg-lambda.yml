@@ -1,4 +1,4 @@
-name: mosaic-resultimage-lambda-deploy
+name: mosaic-dev-resultimg-lambda-deploy
 
 on:
   push:

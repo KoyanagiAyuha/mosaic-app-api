@@ -1,4 +1,4 @@
-name: mosaic-list-lambda-deploy
+name: mosaic-dev-list-lambda-deploy
 
 on:
   push:

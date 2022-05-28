@@ -367,7 +367,6 @@ Resources:
   #Bucket for raw snapshot
   S3BucketForRegisterImg:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
     Properties:
       BucketName: !Sub ${Sysname}-${Env}-registerimg-${AWS::AccountId}
       AccessControl: Private
@@ -384,7 +383,6 @@ Resources:
   #Bucket for detection result image
   S3BucketForResultImg:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
     Properties:
       BucketName: !Sub ${Sysname}-${Env}-resultimg-${AWS::AccountId}
       AccessControl: Private
@@ -441,7 +439,16 @@ Resources:
       ParentId: !GetAtt
         - RestAPIForGetImgAndList
         - RootResourceId
-      PathPart: register
+      PathPart: subject
+
+  APIGatewayResourceForRegisterImg:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestAPIForGetImgAndList
+      ParentId: !GetAtt
+        - RestAPIForGetImgAndList
+        - RootResourceId
+      PathPart: subjectimg
 
   APIGatewayResourceForMosaic:
     Type: AWS::ApiGateway::Resource
@@ -458,17 +465,9 @@ Resources:
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref Authorizer
       HttpMethod: GET
-      MethodResponses:
-        - StatusCode: 200
-          ResponseModels:
-            application/json: Empty
       Integration:
-        Type: AWS
+        Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        IntegrationResponses:
-          - ResponseTemplates:
-              "application/json": ""
-            StatusCode: 200
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionForGetList.Arn}/invocations
       ResourceId: !Ref APIGatewayResourceForGetList
       RestApiId: !Ref RestAPIForGetImgAndList
@@ -479,17 +478,9 @@ Resources:
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref Authorizer
       HttpMethod: POST
-      MethodResponses:
-        - StatusCode: 200
-          ResponseModels:
-            application/json: Empty
       Integration:
-        Type: AWS
+        Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        IntegrationResponses:
-          - ResponseTemplates:
-              "application/json": ""
-            StatusCode: 200
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionForGetResultImg.Arn}/invocations
       ResourceId: !Ref APIGatewayResourceForGetImg
       RestApiId: !Ref RestAPIForGetImgAndList
@@ -500,19 +491,50 @@ Resources:
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref Authorizer
       HttpMethod: POST
-      MethodResponses:
-        - StatusCode: 200
-          ResponseModels:
-            application/json: Empty
       Integration:
-        Type: AWS
+        Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        IntegrationResponses:
-          - ResponseTemplates:
-              "application/json": ""
-            StatusCode: 200
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionForRegister.Arn}/invocations
       ResourceId: !Ref APIGatewayResourceForRegister
+      RestApiId: !Ref RestAPIForGetImgAndList
+
+  APIGatewayMethodForRegisterGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref Authorizer
+      HttpMethod: GET
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionForGetSabjectList.Arn}/invocations
+      ResourceId: !Ref APIGatewayResourceForRegister
+      RestApiId: !Ref RestAPIForGetImgAndList
+  
+  APIGatewayMethodForRegisterDelete:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref Authorizer
+      HttpMethod: DELETE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionForDeleteSabjectList.Arn}/invocations
+      ResourceId: !Ref APIGatewayResourceForRegister
+      RestApiId: !Ref RestAPIForGetImgAndList
+
+  APIGatewayMethodForRegisterImgGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref Authorizer
+      HttpMethod: GET
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionForGetSabjectImg.Arn}/invocations
+      ResourceId: !Ref APIGatewayResourceForRegisterImg
       RestApiId: !Ref RestAPIForGetImgAndList
 
   APIGatewayMethodForMosaic:
@@ -521,26 +543,19 @@ Resources:
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref Authorizer
       HttpMethod: POST
-      MethodResponses:
-        - StatusCode: 200
-          ResponseModels:
-            application/json: Empty
       Integration:
-        Type: AWS
+        Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        IntegrationResponses:
-          - ResponseTemplates:
-              "application/json": ""
-            StatusCode: 200
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionForMosaic.Arn}/invocations
       ResourceId: !Ref APIGatewayResourceForMosaic
       RestApiId: !Ref RestAPIForGetImgAndList
+
+    
 
   #########################  DynamoDB ########################
   #Table for result of detect
   DynamoDBForEditPicture:
     Type: "AWS::DynamoDB::Table"
-    DeletionPolicy: Retain
     Properties:
       TableName: !Sub ${Sysname}-${Env}-editpicture-table
       AttributeDefinitions:
@@ -548,18 +563,18 @@ Resources:
           AttributeType: S #this means type is String
         - AttributeName: uuid # index of detection result in a image
           AttributeType: S #this means type is Number
-        - AttributeName: created_on # index of detection result in a image
+        - AttributeName: created_at # index of detection result in a image
           AttributeType: N #this means type is Number
       KeySchema:
         - AttributeName: username
           KeyType: HASH #this means column is partition(primary) key
-        - AttributeName: created_on
+        - AttributeName: created_at
           KeyType: RANGE #this meanst column is sort key
       ProvisionedThroughput:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
       GlobalSecondaryIndexes:
-        - IndexName: uuid--index
+        - IndexName: uuid-index
           KeySchema:
             - AttributeName: uuid
               KeyType: HASH
@@ -572,28 +587,39 @@ Resources:
   #Table for list data of image
   DynamoDBForRegisterPic:
     Type: "AWS::DynamoDB::Table"
-    DeletionPolicy: Retain
     Properties:
       TableName: !Sub ${Sysname}-${Env}-registerpic-table
       AttributeDefinitions:
         - AttributeName: username
           AttributeType: S
+        - AttributeName: created_at
+          AttributeType: N
         - AttributeName: uuid
           AttributeType: S
       KeySchema:
         - AttributeName: username
           KeyType: HASH #this means column is partition(primary) key
-        - AttributeName: uuid
+        - AttributeName: created_at
           KeyType: RANGE #this meanst column is sort key
       ProvisionedThroughput:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
+      GlobalSecondaryIndexes:
+        - IndexName: uuid-index
+          KeySchema:
+            - AttributeName: uuid
+              KeyType: HASH
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+          Projection:
+            ProjectionType: ALL
 
   ######################### Role for lambda #########################
-  LambdaExecutionRoleForStartBatch:
+  LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${Sysname}-${Env}-staratbatch-function-execution-role
+      RoleName: !Sub ${Sysname}-${Env}-function-execution-role
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -603,7 +629,7 @@ Resources:
                 - lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: !Sub ${Sysname}-${Env}-staratbatch-function-policy
+        - PolicyName: !Sub ${Sysname}-${Env}-function-policy
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -621,31 +647,6 @@ Resources:
                 Effect: Allow
                 Action:
                   - batch:*
-
-  LambdaExecutionRoleForGetImg:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${Sysname}-${Env}-resultimg-function-execution-role
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: !Sub ${Sysname}-${Env}-resultimg-function-policy
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Resource: "*"
-                Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                  - logs:CreateExportTask
               - Resource:
                   - !GetAtt S3BucketForRegisterImg.Arn
                   - !GetAtt S3BucketForResultImg.Arn
@@ -654,98 +655,11 @@ Resources:
                 Effect: Allow
                 Action:
                   - "s3:*"
-
-  LambdaExecutionRoleForList:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${Sysname}-${Env}-list-function-execution-role
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: !Sub ${Sysname}-${Env}-list-function-policy
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Resource: "*"
-                Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                  - logs:CreateExportTask
               - Resource:
                   - !GetAtt DynamoDBForEditPicture.Arn
                   - !GetAtt DynamoDBForRegisterPic.Arn
                   - !Sub ${DynamoDBForEditPicture.Arn}/*
                   - !Sub ${DynamoDBForRegisterPic.Arn}/*
-                Effect: Allow
-                Action:
-                  - dynamodb:*
-
-  LambdaExecutionRoleForRegister:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${Sysname}-${Env}-register-function-execution-role
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: !Sub ${Sysname}-${Env}-register-function-policy
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Resource: "*"
-                Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                  - logs:CreateExportTask
-              - Resource:
-                  - !GetAtt DynamoDBForEditPicture.Arn
-                  - !Sub ${DynamoDBForEditPicture.Arn}/*
-                Effect: Allow
-                Action:
-                  - dynamodb:*
-
-  LambdaExecutionRoleForMosaic:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${Sysname}-${Env}-mosaic-function-execution-role
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: !Sub ${Sysname}-${Env}-mosaic-function-policy
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Resource: "*"
-                Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                  - logs:CreateExportTask
-              - Resource:
-                  - !GetAtt DynamoDBForEditPicture.Arn
-                  - !Sub ${DynamoDBForEditPicture.Arn}/*
                 Effect: Allow
                 Action:
                   - dynamodb:*
@@ -760,7 +674,7 @@ Resources:
       MemorySize: 128
       Timeout: 900
       Role: !GetAtt
-        - LambdaExecutionRoleForGetImg
+        - LambdaExecutionRole
         - Arn
       Runtime: python3.9
       Handler: lambda_function.lambda_handler
@@ -788,7 +702,7 @@ Resources:
       MemorySize: 128
       Timeout: 900
       Role: !GetAtt
-        - LambdaExecutionRoleForGetImg
+        - LambdaExecutionRole
         - Arn
       Runtime: python3.9
       Handler: lambda_function.lambda_handler
@@ -816,25 +730,7 @@ Resources:
       MemorySize: 128
       Timeout: 900
       Role: !GetAtt
-        - LambdaExecutionRoleForGetImg
-        - Arn
-      Runtime: python3.9
-      Handler: lambda_function.lambda_handler
-      Code:
-        ZipFile: |
-          return "a"
-      TracingConfig:
-        Mode: Active
-
-  lambdaFunctionForMosaic:
-    Type: AWS::Lambda::Function
-    Properties:
-      Description: change Mosaic flag in dynamoDB
-      FunctionName: !Sub ${Sysname}-${Env}-mosaic-function
-      MemorySize: 128
-      Timeout: 900
-      Role: !GetAtt
-        - LambdaExecutionRoleForGetImg
+        - LambdaExecutionRole
         - Arn
       Runtime: python3.9
       Handler: lambda_function.lambda_handler
@@ -851,7 +747,26 @@ Resources:
       FunctionName: !Ref lambdaFunctionForRegister
       Action: "lambda:InvokeFunction"
       Principal: "apigateway.amazonaws.com"
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/Register
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/subject
+
+  # lambda for change isRegister flag in dynamoDB
+  lambdaFunctionForMosaic:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: change Mosaic flag in dynamoDB
+      FunctionName: !Sub ${Sysname}-${Env}-mosaic-function
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt
+        - LambdaExecutionRole
+        - Arn
+      Runtime: python3.9
+      Handler: lambda_function.lambda_handler
+      Code:
+        ZipFile: |
+          return "a"
+      TracingConfig:
+        Mode: Active
 
   #lambda(for change mosaic flag) permission for api gateway
   MosaicLambdaPermissionForAPIGateway:
@@ -861,6 +776,90 @@ Resources:
       Action: "lambda:InvokeFunction"
       Principal: "apigateway.amazonaws.com"
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/mosaic
+
+  # lambda for change isRegister flag in dynamoDB
+  lambdaFunctionForGetSabjectList:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: change Mosaic flag in dynamoDB
+      FunctionName: !Sub ${Sysname}-${Env}-get-sabject-list-function
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt
+        - LambdaExecutionRole
+        - Arn
+      Runtime: python3.9
+      Handler: lambda_function.lambda_handler
+      Code:
+        ZipFile: |
+          return "a"
+      TracingConfig:
+        Mode: Active
+
+  #lambda(for change mosaic flag) permission for api gateway
+  GetSabjectListLambdaPermissionForAPIGateway:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref lambdaFunctionForGetSabjectList
+      Action: "lambda:InvokeFunction"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/sabject
+
+  # lambda for change isRegister flag in dynamoDB
+  lambdaFunctionForDeleteSabjectList:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: change Mosaic flag in dynamoDB
+      FunctionName: !Sub ${Sysname}-${Env}-delete-sabject-list-function
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt
+        - LambdaExecutionRole
+        - Arn
+      Runtime: python3.9
+      Handler: lambda_function.lambda_handler
+      Code:
+        ZipFile: |
+          return "a"
+      TracingConfig:
+        Mode: Active
+
+  #lambda(for change mosaic flag) permission for api gateway
+  GetSabjectListLambdaPermissionForAPIGateway:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref lambdaFunctionForDeleteSabjectList
+      Action: "lambda:InvokeFunction"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/sabject
+
+  # lambda for change isRegister flag in dynamoDB
+  lambdaFunctionForGetSabjectImg:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: change Mosaic flag in dynamoDB
+      FunctionName: !Sub ${Sysname}-${Env}-get-sabject-img-function
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt
+        - LambdaExecutionRole
+        - Arn
+      Runtime: python3.9
+      Handler: lambda_function.lambda_handler
+      Code:
+        ZipFile: |
+          return "a"
+      TracingConfig:
+        Mode: Active
+
+  #lambda(for change mosaic flag) permission for api gateway
+  GetSabjectImgLambdaPermissionForAPIGateway:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref lambdaFunctionForGetSabjectImg
+      Action: "lambda:InvokeFunction"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/sabject
 
   ############ Role ############
   ComputeEnvRole:
