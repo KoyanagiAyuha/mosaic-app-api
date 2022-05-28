@@ -80,7 +80,7 @@ def check_limit(username):
 
     response = table.query(KeyConditionExpression=Key('username').eq(username))
 
-    if len(response['item']) < 5:
+    if len(response['items']) < 5:
         return True
     else:
         return False
@@ -89,7 +89,7 @@ def check_limit(username):
 def lambda_handler(event, context):
 
     username = event["requestContext"]["authorizer"]["claims"]["cognito:username"]
-    eventbody = json.loads(event["body"])
+    eventbody = event["body"]
 
     img_title = eventbody["imgTitle"]
     img = eventbody['img']
@@ -114,10 +114,14 @@ def lambda_handler(event, context):
 
         put_posts(username, created_at, img_id, img_title)
 
-        # TODO implement
+        res = {
+            'status': 'OK',
+            'message': 'Registered successfully'
+        }
+
         return {
             'statusCode': 200,
-            'body': "OK"
+            'body': json.dumps(res)
         }
     else:
         return {
