@@ -1,10 +1,8 @@
-import os
+
 import boto3
 from boto3.dynamodb.conditions import Key
 import logging
 import sys
-from typing import Union
-import traceback
 import json
 
 # 既存ロガーハンドラーの削除
@@ -44,56 +42,56 @@ def log_decorator():
     return _log_decorator
 
 
-def put_posts(title, username, imglist, created_on, postid):
+SUBJECT_TABLE_NAME = 'mosaic-dev-registerpic-table'
+SUBJECT_BUCKET_NAME = 'mosaic-dev-registerimg-597775291172'
+
+
+@log_decorator()
+def delete_recode(img_id):
 
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(os.environ.get('DB_TABLE'))
+    table = dynamodb.Table(SUBJECT_TABLE_NAME)
 
-    table.put_item(
-        Item={
-            'userPost': username,
-            'title': title,
-            'img': imglist,
-            'created_on': created_on,
-            'id': postid,
-            'timestamp': ""
-        }
-    )
+    response = table.query(
+        IndexName='uuid-index',
+        KeyConditionExpression=Key('uuid').eq(img_id)
+    )['Items']
+
+    if len(response) == 1:
+        username = response[0]['username']
+        created_at = response[0]['created_at']
+
+        table.delete_item(
+            Key={'username': username, 'created_at': created_at},
+        )
+
+        return {'status': 'OK',
+                'message': 'delete Registered img successfully'}
+    return {'status': 'NG',
+            'message': 'id not found'}
 
 
-def post_image(img, key):
+@log_decorator()
+def delete_image(key):
+    s3 = boto3.client('s3')
 
-    s3 = boto3.resource('s3')
-    bucket = s3.Bucket(os.environ.get('DB_TABLE'))
-
-    bucket.upload_file(img, key)
+    s3.delete_object(Bucket=SUBJECT_BUCKET_NAME, Key=key)
 
 
+@log_decorator()
 def lambda_handler(event, context):
 
     username = event["requestContext"]["authorizer"]["claims"]["cognito:username"]
     eventbody = json.loads(event["body"])
 
-    title = eventbody["title"]
-    imglist = eventbody['img']
+    img_id = eventbody["imgId"]
 
-    # GOOD, タイムゾーンを指定している．早い
-    timestamp = created_on.timestamp()
-    created_on_str = created_on.strftime('%Y-%m-%d %H:%M:%S')
-    postimg_name = []
-    postid = str(uuid.uuid4())
-    for i, img in enumerate(imglist):
-        encode_file = '/tmp/tmp' + ext
-        with open(encode_file, "wb") as f:
-            f.write(encode)
-        key = postid + '/' + str(i) + ext
-        postimg_name.append(key)
-        post_image(encode_file, key)
-
-    put_posts(title, username, postimg_name, created_on_str, postid, timestamp)
+    s3_key = "{}/{}.jpg".format(username, img_id)
+    delete_image(s3_key)
+    res = delete_recode(img_id)
 
     # TODO implement
     return {
         'statusCode': 200,
-        'body': "OK"
+        'body': json.dumps(res)
     }

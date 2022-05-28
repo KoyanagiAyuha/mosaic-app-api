@@ -510,7 +510,7 @@ Resources:
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionForGetSabjectList.Arn}/invocations
       ResourceId: !Ref APIGatewayResourceForRegister
       RestApiId: !Ref RestAPIForGetImgAndList
-  
+
   APIGatewayMethodForRegisterDelete:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -549,8 +549,6 @@ Resources:
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionForMosaic.Arn}/invocations
       ResourceId: !Ref APIGatewayResourceForMosaic
       RestApiId: !Ref RestAPIForGetImgAndList
-
-    
 
   #########################  DynamoDB ########################
   #Table for result of detect
@@ -803,7 +801,7 @@ Resources:
       FunctionName: !Ref lambdaFunctionForGetSabjectList
       Action: "lambda:InvokeFunction"
       Principal: "apigateway.amazonaws.com"
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/sabject
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/subject
 
   # lambda for change isRegister flag in dynamoDB
   lambdaFunctionForDeleteSabjectList:
@@ -825,13 +823,13 @@ Resources:
         Mode: Active
 
   #lambda(for change mosaic flag) permission for api gateway
-  GetSabjectListLambdaPermissionForAPIGateway:
+  DeleteSabjectListLambdaPermissionForAPIGateway:
     Type: "AWS::Lambda::Permission"
     Properties:
       FunctionName: !Ref lambdaFunctionForDeleteSabjectList
       Action: "lambda:InvokeFunction"
       Principal: "apigateway.amazonaws.com"
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/sabject
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/subject
 
   # lambda for change isRegister flag in dynamoDB
   lambdaFunctionForGetSabjectImg:
@@ -859,7 +857,7 @@ Resources:
       FunctionName: !Ref lambdaFunctionForGetSabjectImg
       Action: "lambda:InvokeFunction"
       Principal: "apigateway.amazonaws.com"
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/sabject
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/subjectimg
 
   ############ Role ############
   ComputeEnvRole:
