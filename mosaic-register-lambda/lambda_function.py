@@ -86,6 +86,9 @@ def check_limit(username):
         return False
 
 
+log_decorator()
+
+
 def lambda_handler(event, context):
 
     logger.info(event)

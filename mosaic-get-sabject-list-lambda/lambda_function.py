@@ -3,8 +3,6 @@ import boto3
 from boto3.dynamodb.conditions import Key
 import logging
 import sys
-from typing import Union
-import traceback
 import json
 
 # 既存ロガーハンドラーの削除
@@ -26,6 +24,9 @@ to_stream.setFormatter(log_format)
 logger.addHandler(to_stream)
 
 
+SUBJECT_TABLE_NAME = 'mosaic-dev-registerpic-table'
+
+
 def log_decorator():
     def _log_decorator(func):
         def wrapper(*args, **kwargs):
@@ -44,56 +45,34 @@ def log_decorator():
     return _log_decorator
 
 
-def put_posts(title, username, imglist, created_on, postid):
+@log_decorator()
+def get_subject_list(username):
 
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(os.environ.get('DB_TABLE'))
 
-    table.put_item(
-        Item={
-            'userPost': username,
-            'title': title,
-            'img': imglist,
-            'created_on': created_on,
-            'id': postid,
-            'timestamp': ""
-        }
-    )
+    response = table.query(KeyConditionExpression=Key('username').eq(username))
+
+    return response
 
 
-def post_image(img, key):
-
-    s3 = boto3.resource('s3')
-    bucket = s3.Bucket(os.environ.get('DB_TABLE'))
-
-    bucket.upload_file(img, key)
-
-
+@log_decorator()
 def lambda_handler(event, context):
 
+    logger.info(event)
+
     username = event["requestContext"]["authorizer"]["claims"]["cognito:username"]
-    eventbody = json.loads(event["body"])
 
-    title = eventbody["title"]
-    imglist = eventbody['img']
+    subject_list = get_subject_list(username)
 
-    # GOOD, タイムゾーンを指定している．早い
-    timestamp = created_on.timestamp()
-    created_on_str = created_on.strftime('%Y-%m-%d %H:%M:%S')
-    postimg_name = []
-    postid = str(uuid.uuid4())
-    for i, img in enumerate(imglist):
-        encode_file = '/tmp/tmp' + ext
-        with open(encode_file, "wb") as f:
-            f.write(encode)
-        key = postid + '/' + str(i) + ext
-        postimg_name.append(key)
-        post_image(encode_file, key)
-
-    put_posts(title, username, postimg_name, created_on_str, postid, timestamp)
+    res = {
+        'status': 'OK',
+        'message': 'get Registered img successfully',
+        'data': subject_list
+    }
 
     # TODO implement
     return {
         'statusCode': 200,
-        'body': "OK"
+        'body': json.dumps(res)
     }
