@@ -1,11 +1,8 @@
-import os
 import boto3
-from boto3.dynamodb.conditions import Key
 import logging
 import sys
-from typing import Union
-import traceback
 import json
+import base64
 
 # 既存ロガーハンドラーの削除
 default_logger = logging.getLogger()
@@ -44,56 +41,50 @@ def log_decorator():
     return _log_decorator
 
 
-def put_posts(title, username, imglist, created_on, postid):
-
-    dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(os.environ.get('DB_TABLE'))
-
-    table.put_item(
-        Item={
-            'userPost': username,
-            'title': title,
-            'img': imglist,
-            'created_on': created_on,
-            'id': postid,
-            'timestamp': ""
-        }
-    )
+SUBJECT_BUCKET_NAME = 'mosaic-dev-registerimg-597775291172'
 
 
-def post_image(img, key):
+@log_decorator()
+def get_image(key):
 
-    s3 = boto3.resource('s3')
-    bucket = s3.Bucket(os.environ.get('DB_TABLE'))
+    s3 = boto3.client('s3')
 
-    bucket.upload_file(img, key)
+    try:
+        body = s3.get_object(Bucket=SUBJECT_BUCKET_NAME, Key=key)['Body'].read()
+    except Exception:
+        return False, ''
+
+    encode = base64.b64encode(body).decode()
+
+    return True, encode
 
 
+@log_decorator()
 def lambda_handler(event, context):
 
     username = event["requestContext"]["authorizer"]["claims"]["cognito:username"]
     eventbody = json.loads(event["body"])
 
-    title = eventbody["title"]
-    imglist = eventbody['img']
+    img_id = eventbody['imgId']
 
-    # GOOD, タイムゾーンを指定している．早い
-    timestamp = created_on.timestamp()
-    created_on_str = created_on.strftime('%Y-%m-%d %H:%M:%S')
-    postimg_name = []
-    postid = str(uuid.uuid4())
-    for i, img in enumerate(imglist):
-        encode_file = '/tmp/tmp' + ext
-        with open(encode_file, "wb") as f:
-            f.write(encode)
-        key = postid + '/' + str(i) + ext
-        postimg_name.append(key)
-        post_image(encode_file, key)
+    s3_key = "{}/{}.jpg".format(username, img_id)
 
-    put_posts(title, username, postimg_name, created_on_str, postid, timestamp)
+    is_get, img = get_image(s3_key)
 
-    # TODO implement
+    if is_get:
+        res = {
+            "status": "OK",
+            "message": "get Registered img successfully",
+            "img": img
+        }
+    else:
+        res = {
+            "status": "NG",
+            "message": "id not found",
+            "img": img
+        }
+
     return {
         'statusCode': 200,
-        'body': "OK"
+        'body': json.dumps(res)
     }
