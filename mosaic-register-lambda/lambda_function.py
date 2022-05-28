@@ -88,6 +88,8 @@ def check_limit(username):
 
 def lambda_handler(event, context):
 
+    logger.info(event)
+
     username = event["requestContext"]["authorizer"]["claims"]["cognito:username"]
     eventbody = event["body"]
 
