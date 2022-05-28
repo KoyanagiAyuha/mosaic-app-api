@@ -91,7 +91,7 @@ def lambda_handler(event, context):
     logger.info(event)
 
     username = event["requestContext"]["authorizer"]["claims"]["cognito:username"]
-    eventbody = event["body"]
+    eventbody = json.loads(event["body"])
 
     img_title = eventbody["imgTitle"]
     img = eventbody['img']
