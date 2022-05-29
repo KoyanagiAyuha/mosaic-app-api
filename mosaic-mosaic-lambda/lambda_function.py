@@ -279,7 +279,7 @@ def lambda_handler(event, context):
         create_record(username, now_str, img_id, img_title)
 
         try:
-            data = create_mosaic_img(img)
+            data = create_mosaic_img(img, username)
 
             post_image(data, s3_post_key)
 
