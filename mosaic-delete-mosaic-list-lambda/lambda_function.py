@@ -1,8 +1,8 @@
 import boto3
 import logging
+from boto3.dynamodb.conditions import Key
 import sys
 import json
-import base64
 
 # 既存ロガーハンドラーの削除
 default_logger = logging.getLogger()
@@ -41,22 +41,46 @@ def log_decorator():
     return _log_decorator
 
 
-SUBJECT_BUCKET_NAME = 'mosaic-dev-registerimg-597775291172'
+EDIT_TABLE_NAME = "mosaic-dev-editpicture-table"
+EDIT_BUCKET_NAME = 'mosaic-dev-resultimg-597775291172'
 
 
 @log_decorator()
-def get_image(key):
+def update_recode(username, img_id):
 
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table(EDIT_TABLE_NAME)
+
+    response = table.query(
+        IndexName='uuid-index',
+        KeyConditionExpression=Key('uuid').eq(img_id)
+    )['Items']
+
+    if len(response) == 1:
+        created_at = response[0]['created_at']
+
+        table.update_item(
+            Key={'username': username, 'created_at': created_at},
+            UpdateExpression="set #st=:s",
+            ExpressionAttributeNames={
+                '#st': 'is_delete',
+            },
+            ExpressionAttributeValues={
+                ':s': True,
+            }
+        )
+
+        return {'status': 'OK',
+                'message': 'delete Registered img successfully'}
+    return {'status': 'NG',
+            'message': 'id not found'}
+
+
+@log_decorator()
+def delete_image(key):
     s3 = boto3.client('s3')
 
-    try:
-        body = s3.get_object(Bucket=SUBJECT_BUCKET_NAME, Key=key)['Body'].read()
-    except Exception:
-        return False, ''
-
-    encode = base64.b64encode(body).decode()
-
-    return True, encode
+    s3.delete_object(Bucket=EDIT_BUCKET_NAME, Key=key)
 
 
 @log_decorator()
@@ -65,24 +89,11 @@ def lambda_handler(event, context):
     username = event["requestContext"]["authorizer"]["claims"]["cognito:username"]
     eventbody = json.loads(event["body"])
 
-    img_id = eventbody['imgId']
+    img_id = eventbody["imgId"]
 
     s3_key = "{}/{}.jpg".format(username, img_id)
-
-    is_get, img = get_image(s3_key)
-
-    if is_get:
-        res = {
-            "status": "OK",
-            "message": "get Registered img successfully",
-            "img": img
-        }
-    else:
-        res = {
-            "status": "NG",
-            "message": "id not found",
-            "img": img
-        }
+    delete_image(s3_key)
+    res = update_recode(username, img_id)
 
     return {
         'statusCode': 200,

@@ -116,6 +116,42 @@ def create_record(username, created_at, post_id, img_title):
 
 
 @log_decorator()
+def succeeded_record(username, created_at):
+
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table(EDIT_TABLE_NAME)
+
+    table.update_item(
+        Key={'username': username, 'created_at': created_at},
+        UpdateExpression="set #st=:s",
+        ExpressionAttributeNames={
+            '#st': 'status',
+        },
+        ExpressionAttributeValues={
+            ':s': 'Succeeded',
+        }
+    )
+
+
+@log_decorator()
+def failed_record(username, created_at):
+
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table(EDIT_TABLE_NAME)
+
+    table.update_item(
+        Key={'username': username, 'created_at': created_at},
+        UpdateExpression="set #st=:s",
+        ExpressionAttributeNames={
+            '#st': 'status',
+        },
+        ExpressionAttributeValues={
+            ':s': 'Failed',
+        }
+    )
+
+
+@log_decorator()
 def create_mosaic_img(img, username):
     cv_img = base64_to_cv2(img)
 
@@ -283,6 +319,8 @@ def lambda_handler(event, context):
 
             post_image(data, s3_post_key)
 
+            succeeded_record(username, now_str)
+
             res = {
                 'status': 'OK',
                 'message': 'mosaic successfully',
@@ -290,6 +328,8 @@ def lambda_handler(event, context):
             }
         except Exception as e:
             logger.error(e)
+            now_str = now.isoformat()
+            failed_record(username, now_str)
             res = {
                 'status': 'Error',
                 'message': 'mosaic Failed',
