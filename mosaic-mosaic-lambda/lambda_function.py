@@ -1,9 +1,10 @@
-import os
+import uuid
 import boto3
 from boto3.dynamodb.conditions import Key
 import logging
 import sys
 import json
+from datetime import datetime, timedelta, timezone
 
 # 既存ロガーハンドラーの削除
 default_logger = logging.getLogger()
@@ -24,7 +25,10 @@ to_stream.setFormatter(log_format)
 logger.addHandler(to_stream)
 
 
-EDIT_DB_TABLE_NAME = "mosaic-dev-editpicture-table"
+EDIT_TABLE_NAME = "mosaic-dev-editpicture-table"
+EDIT_BUCKET_NAME = 'mosaic-dev-resultimg-597775291172'
+SUBJECT_BUCKET_NAME = 'mosaic-dev-registerimg-597775291172'
+SUBJECT_TABLE_NAME = 'mosaic-dev-registerpic-table'
 
 
 def log_decorator():
@@ -45,41 +49,77 @@ def log_decorator():
     return _log_decorator
 
 
-def db_post(title, username, imglist, created_on, postid):
+@log_decorator()
+def check_limit(username):
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table(EDIT_TABLE_NAME)
+
+    response = table.query(KeyConditionExpression=Key('username').eq(username))
+
+    if len(response['Items']) < 5:
+        return True
+    else:
+        return False
+
+
+@log_decorator()
+def create_record(username, created_at, post_id, img_title):
 
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(EDIT_DB_TABLE_NAME)
+    table = dynamodb.Table(EDIT_TABLE_NAME)
 
     table.put_item(
         Item={
             'username': username,
-            'title': title,
-            'img': imglist,
-            'created_on': created_on,
-            'id': postid,
-            'timestamp': ""
+            'created_at': created_at,
+            'uuid': post_id,
+            'img_title': img_title,
+            'is_delete': False,
+            'status': "running"
         }
     )
 
 
-def post_image(img, key):
-
-    s3 = boto3.resource('s3')
-    bucket = s3.Bucket(os.environ.get('DB_TABLE'))
-
-    bucket.upload_file(img, key)
-
-
 def lambda_handler(event, context):
+
+    logger.info(event)
 
     username = event["requestContext"]["authorizer"]["claims"]["cognito:username"]
     eventbody = json.loads(event["body"])
 
-    title = eventbody["title"]
+    img_title = eventbody["imgTitle"]
     img = eventbody['img']
 
-    # TODO implement
+    # タイムゾーンの生成
+    JST = timezone(timedelta(hours=+9), 'JST')
+
+    # GOOD, タイムゾーンを指定している．早い
+    now = datetime.now(JST)
+
+    # 5未満ならTrue
+    is_continue = check_limit(username, now)
+
+    if is_continue:
+
+        img_id = str(uuid.uuid4())
+        s3_post_key = "{}/{}.jpg".format(username, img_id)
+
+        # stringに変更
+        now_str = now.isoformat()
+        create_record(username, now_str, img_id, img_title)
+
+        res = {
+            'status': 'OK',
+            'message': 'Registered successfully'
+        }
+
+    else:
+        res = {
+            'status': 'NG',
+            'message': 'Over regulation'
+        }
+
     return {
         'statusCode': 200,
-        'body': "OK"
+        'body': json.dumps(res)
     }

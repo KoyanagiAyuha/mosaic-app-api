@@ -49,7 +49,7 @@ def log_decorator():
 
 
 @log_decorator()
-def put_posts(username, created_at, postid, img_title):
+def create_record(username, created_at, postid, img_title):
 
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(SUBJECT_TABLE_NAME)
@@ -113,11 +113,11 @@ def lambda_handler(event, context):
         # GOOD, タイムゾーンを指定している．早い
         now = datetime.now(JST)
         # エポックミリ秒に変換
-        created_at = int(now.timestamp() * 1000)
+        now_str = now.isoformat()
 
         post_image(img, s3_post_key)
 
-        put_posts(username, created_at, img_id, img_title)
+        create_record(username, now_str, img_id, img_title)
 
         res = {
             'status': 'OK',

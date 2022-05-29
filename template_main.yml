@@ -562,7 +562,7 @@ Resources:
         - AttributeName: uuid # index of detection result in a image
           AttributeType: S #this means type is Number
         - AttributeName: created_at # index of detection result in a image
-          AttributeType: N #this means type is Number
+          AttributeType: S #this means type is Number
       KeySchema:
         - AttributeName: username
           KeyType: HASH #this means column is partition(primary) key
@@ -591,7 +591,7 @@ Resources:
         - AttributeName: username
           AttributeType: S
         - AttributeName: created_at
-          AttributeType: N
+          AttributeType: S
         - AttributeName: uuid
           AttributeType: S
       KeySchema:
