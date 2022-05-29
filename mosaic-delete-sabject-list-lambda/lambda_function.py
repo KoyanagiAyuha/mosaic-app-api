@@ -89,7 +89,6 @@ def lambda_handler(event, context):
     delete_image(s3_key)
     res = delete_recode(username, img_id)
 
-    # TODO implement
     return {
         'statusCode': 200,
         'body': json.dumps(res)
