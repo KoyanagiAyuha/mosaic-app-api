@@ -107,7 +107,7 @@ def create_record(username, created_at, post_id, img_title):
 @log_decorator()
 def create_mosaic_img(img):
     cv_img = base64_to_cv2(img)
-    base64_img = base64_to_cv2(cv_img)
+    base64_img = cv2_to_base64(cv_img)
     return base64_img
 
 
