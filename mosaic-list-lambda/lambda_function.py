@@ -22,6 +22,8 @@ to_stream.setFormatter(log_format)
 # ロガーへハンドラーを追加する
 logger.addHandler(to_stream)
 
+EDIT_TABLE_NAME = "mosaic-dev-editpicture-table"
+
 
 def log_decorator():
     def _log_decorator(func):
@@ -42,47 +44,33 @@ def log_decorator():
 
 
 @log_decorator()
-def get_list(username):
+def get_subject_list(username):
 
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table('TABLE_NAME')
+    table = dynamodb.Table(EDIT_TABLE_NAME)
 
-    response = table.query(
-        KeyConditionExpression=Key('username').eq(username),
-    )
-    # 下記のwhile内で取得したレコードを連結するための箱（data）の準備
-    data = response['Items']
+    response = table.query(KeyConditionExpression=Key('username').eq(username))
 
-    # レスポンスに LastEvaluatedKey が含まれなくなるまで無限ループ
-    while 'LastEvaluatedKey' in response:
-        response = table.query(
-            KeyConditionExpression=Key('username').eq(username),
-            ExclusiveStartKey=response['LastEvaluatedKey']
-        )
-        # dataにレコードを追加
-        data.extend(response['Items'])
-
-    return data
+    return response
 
 
 @log_decorator()
 def lambda_handler(event, context):
 
-    try:
-        username = event["requestContext"]["authorizer"]["claims"]["cognito:username"]
-        data = get_list(username)
-        data = {
-            "status": "OK",
-            "payloads": data
-        }
-    except Exception:
-        data = {
-            "status": "NG"
-        }
+    logger.info(event)
+
+    username = event["requestContext"]["authorizer"]["claims"]["cognito:username"]
+
+    subject_list = get_subject_list(username)["Items"]
+
+    res = {
+        'status': 'OK',
+        'message': 'get Registered img successfully',
+        'data': subject_list
+    }
 
     # TODO implement
     return {
         'statusCode': 200,
-        'isBase64Encoded': False,
-        'body': json.dumps(data)
+        'body': json.dumps(res)
     }

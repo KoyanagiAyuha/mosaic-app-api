@@ -56,12 +56,6 @@ def get_subject_list(username):
 
 
 @log_decorator()
-def change_type(i):
-    i["created_at"] = int(i["created_at"])
-    return i
-
-
-@log_decorator()
 def lambda_handler(event, context):
 
     logger.info(event)
@@ -69,8 +63,6 @@ def lambda_handler(event, context):
     username = event["requestContext"]["authorizer"]["claims"]["cognito:username"]
 
     subject_list = get_subject_list(username)["Items"]
-
-    subject_list = list(map(change_type, subject_list))
 
     res = {
         'status': 'OK',
