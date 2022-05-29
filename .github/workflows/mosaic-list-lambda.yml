@@ -14,7 +14,7 @@ env:
   FUNCTION_NAME: "mosaic-dev-list-function"
   REPO_NAME: "mosaic-list-function-ecr-repo"
   ENV: "dev"
-  PATH: "mosaic-list-lambda"
+  PATHS: "mosaic-list-lambda"
 
 jobs:
   lambda-cd:
@@ -29,7 +29,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: eu-central-1
-      - run: cd ${{ env.PATH }} && docker build -t ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.REPO_NAME }}:${{ github.sha }}
+      - run: cd ${{ env.PATHS }} && docker build -t ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.REPO_NAME }}:${{ github.sha }}
       - run: docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.REPO_NAME }}:${{ github.sha }}
       - run: pip3 install awscli
       - run: aws lambda update-function-code --region ${{ env.AWS_DEFAULT_REGION }} --function-name ${{ env.FUNCTION_NAME }} --image-uri ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.REPO_NAME }}:${{ github.sha }}
