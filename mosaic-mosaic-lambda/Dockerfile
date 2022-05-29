@@ -1,10 +1,8 @@
-FROM public.ecr.aws/lambda/python:3.9
-
-COPY lambda_function.py /var/task/
+FROM public.ecr.aws/lambda/python:3.7
 
 COPY requirements.txt .
-RUN pip3 install -r requirements.txt --target "/var/task/"
+RUN pip3 install -r requirements.txt
 
-ENV OPENCV_VERSION=4.5.0
+COPY lambda_function.py /var/task/
 
 CMD [ "lambda_function.lambda_handler" ]
