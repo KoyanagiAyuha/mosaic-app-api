@@ -56,7 +56,7 @@ def update_recode(username, img_id):
         KeyConditionExpression=Key('uuid').eq(img_id)
     )['Items']
 
-    if len(response) == 1:
+    if len(response) == 1 and not response[0]['is_delete']:
         created_at = response[0]['created_at']
 
         table.update_item(
