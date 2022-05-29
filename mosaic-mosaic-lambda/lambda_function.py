@@ -282,7 +282,7 @@ def post_image(img, key):
     s3_client = boto3.client('s3')
     data = base64.b64decode(img)
 
-    s3_client.put_object(Bucket=SUBJECT_BUCKET_NAME, Key=key, Body=data)
+    s3_client.put_object(Bucket=EDIT_BUCKET_NAME, Key=key, Body=data)
 
 
 def lambda_handler(event, context):
