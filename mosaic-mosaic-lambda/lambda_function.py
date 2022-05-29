@@ -5,6 +5,9 @@ import logging
 import sys
 import json
 from datetime import datetime, timedelta, timezone
+import base64
+import cv2
+import numpy as np
 
 # 既存ロガーハンドラーの削除
 default_logger = logging.getLogger()
@@ -50,11 +53,32 @@ def log_decorator():
 
 
 @log_decorator()
-def check_limit(username):
+def base64_to_cv2(image_base64):
+    """base64 image to cv2"""
+    image_bytes = base64.b64decode(image_base64)
+    np_array = np.fromstring(image_bytes, np.uint8)
+    image_cv2 = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
+    return image_cv2
+
+
+@log_decorator()
+def cv2_to_base64(image_cv2):
+    """cv2 image to base64"""
+    image_bytes = cv2.imencode('.jpg', image_cv2)[1].tostring()
+    image_base64 = base64.b64encode(image_bytes).decode()
+    return image_base64
+
+
+@log_decorator()
+def check_limit(username, now):
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(EDIT_TABLE_NAME)
 
-    response = table.query(KeyConditionExpression=Key('username').eq(username))
+    now_format = format(now, '%Y-%m')
+
+    response = table.query(
+        KeyConditionExpression=Key('username').eq(username) & Key('created_at').begins_with(now_format)
+    )
 
     if len(response['Items']) < 5:
         return True
@@ -78,6 +102,21 @@ def create_record(username, created_at, post_id, img_title):
             'status': "running"
         }
     )
+
+
+@log_decorator()
+def create_mosaic_img(img):
+    cv_img = base64_to_cv2(img)
+    base64_img = base64_to_cv2(cv_img)
+    return base64_img
+
+
+def post_image(img, key):
+
+    s3_client = boto3.client('s3')
+    data = base64.b64decode(img)
+
+    s3_client.put_object(Bucket=SUBJECT_BUCKET_NAME, Key=key, Body=data)
 
 
 def lambda_handler(event, context):
@@ -106,17 +145,31 @@ def lambda_handler(event, context):
 
         # stringに変更
         now_str = now.isoformat()
+
         create_record(username, now_str, img_id, img_title)
 
-        res = {
-            'status': 'OK',
-            'message': 'Registered successfully'
-        }
+        try:
+            data = create_mosaic_img(img)
+
+            post_image(data, s3_post_key)
+
+            res = {
+                'status': 'OK',
+                'message': 'mosaic successfully',
+                'img': data
+            }
+        except Exception:
+            res = {
+                'status': 'Error',
+                'message': 'mosaic Failed',
+                'img': ''
+            }
 
     else:
         res = {
             'status': 'NG',
-            'message': 'Over regulation'
+            'message': 'Over regulation',
+            'img': ''
         }
 
     return {
