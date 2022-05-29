@@ -28,7 +28,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: eu-central-1
-      - run: cd ${{ env.PATHS }} && docker build -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.REPO_NAME }}:${{ github.sha }}
+      - run: cd ${{ env.PATHS }} && docker build -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.REPO_NAME }}:${{ github.sha }} .
       - run: docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.REPO_NAME }}:${{ github.sha }}
       - run: pip3 install awscli
       - run: aws lambda update-function-code --region ${{ env.AWS_DEFAULT_REGION }} --function-name ${{ env.FUNCTION_NAME }} --image-uri ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.REPO_NAME }}:${{ github.sha }}
