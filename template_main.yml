@@ -677,6 +677,10 @@ Resources:
                 Effect: Allow
                 Action:
                   - dynamodb:*
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - rekognition:*
 
   ######################### Lambda function #########################
   # lambda for get detection result image from S3
@@ -757,7 +761,7 @@ Resources:
     Properties:
       Description: change Mosaic flag in dynamoDB
       FunctionName: !Sub ${Sysname}-${Env}-mosaic-function
-      MemorySize: 128
+      MemorySize: 2048
       Timeout: 900
       Role: !GetAtt
         - LambdaExecutionRole
@@ -945,6 +949,10 @@ Resources:
                 Effect: Allow
                 Action:
                   - dynamodb:*
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - rekognition:*
 
   ############ Batch ############
   BatchComputeEnvironment:
