@@ -158,7 +158,8 @@ def lambda_handler(event, context):
                 'message': 'mosaic successfully',
                 'img': data
             }
-        except Exception:
+        except Exception as e:
+            logger.error(e)
             res = {
                 'status': 'Error',
                 'message': 'mosaic Failed',
