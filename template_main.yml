@@ -20,6 +20,9 @@ Parameters:
   CognitoArn:
     Type: String
     Description: "Cognito Pool Arn,for example arn:aws:cognito-idp:eu-central-1:597775291172:userpool/eu-central-1_ofxv8UlMK"
+  DefaultLambdaImage:
+    Type: String
+    Default: 597775291172.dkr.ecr.eu-central-1.amazonaws.com/helloworld-lambda:python3.9
 
 Resources:
   ############### VPC ###############
@@ -472,6 +475,19 @@ Resources:
       ResourceId: !Ref APIGatewayResourceForGetList
       RestApiId: !Ref RestAPIForGetImgAndList
 
+  APIGatewayMethodForDeleteList:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref Authorizer
+      HttpMethod: DELETE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaFunctionForDeleteMosaicList.Arn}/invocations
+      ResourceId: !Ref APIGatewayResourceForGetList
+      RestApiId: !Ref RestAPIForGetImgAndList
+
   APIGatewayMethodForImg:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -674,13 +690,9 @@ Resources:
       Role: !GetAtt
         - LambdaExecutionRole
         - Arn
-      Runtime: python3.9
-      Handler: lambda_function.lambda_handler
       Code:
-        ZipFile: |
-          return "a"
-      TracingConfig:
-        Mode: Active
+        ImageUri: !Ref DefaultLambdaImage
+      PackageType: Image
 
   #lambda(for get detection result image) permission for api gateway
   GetImgLambdaPermissionForAPIGateway:
@@ -702,13 +714,9 @@ Resources:
       Role: !GetAtt
         - LambdaExecutionRole
         - Arn
-      Runtime: python3.9
-      Handler: lambda_function.lambda_handler
       Code:
-        ZipFile: |
-          return "a"
-      TracingConfig:
-        Mode: Active
+        ImageUri: !Ref DefaultLambdaImage
+      PackageType: Image
 
   #lambda(for get list data) permission for api gateway
   ListLambdaPermissionForAPIGateway:
@@ -730,13 +738,9 @@ Resources:
       Role: !GetAtt
         - LambdaExecutionRole
         - Arn
-      Runtime: python3.9
-      Handler: lambda_function.lambda_handler
       Code:
-        ZipFile: |
-          return "a"
-      TracingConfig:
-        Mode: Active
+        ImageUri: !Ref DefaultLambdaImage
+      PackageType: Image
 
   #lambda(for change isRegister flag) permission for api gateway
   RegisterLambdaPermissionForAPIGateway:
@@ -758,13 +762,9 @@ Resources:
       Role: !GetAtt
         - LambdaExecutionRole
         - Arn
-      Runtime: python3.9
-      Handler: lambda_function.lambda_handler
       Code:
-        ZipFile: |
-          return "a"
-      TracingConfig:
-        Mode: Active
+        ImageUri: !Ref DefaultLambdaImage
+      PackageType: Image
 
   #lambda(for change mosaic flag) permission for api gateway
   MosaicLambdaPermissionForAPIGateway:
@@ -786,13 +786,9 @@ Resources:
       Role: !GetAtt
         - LambdaExecutionRole
         - Arn
-      Runtime: python3.9
-      Handler: lambda_function.lambda_handler
       Code:
-        ZipFile: |
-          return "a"
-      TracingConfig:
-        Mode: Active
+        ImageUri: !Ref DefaultLambdaImage
+      PackageType: Image
 
   #lambda(for change mosaic flag) permission for api gateway
   GetSabjectListLambdaPermissionForAPIGateway:
@@ -814,13 +810,9 @@ Resources:
       Role: !GetAtt
         - LambdaExecutionRole
         - Arn
-      Runtime: python3.9
-      Handler: lambda_function.lambda_handler
       Code:
-        ZipFile: |
-          return "a"
-      TracingConfig:
-        Mode: Active
+        ImageUri: !Ref DefaultLambdaImage
+      PackageType: Image
 
   #lambda(for change mosaic flag) permission for api gateway
   DeleteSabjectListLambdaPermissionForAPIGateway:
@@ -842,13 +834,9 @@ Resources:
       Role: !GetAtt
         - LambdaExecutionRole
         - Arn
-      Runtime: python3.9
-      Handler: lambda_function.lambda_handler
       Code:
-        ZipFile: |
-          return "a"
-      TracingConfig:
-        Mode: Active
+        ImageUri: !Ref DefaultLambdaImage
+      PackageType: Image
 
   #lambda(for change mosaic flag) permission for api gateway
   GetSabjectImgLambdaPermissionForAPIGateway:
@@ -858,6 +846,30 @@ Resources:
       Action: "lambda:InvokeFunction"
       Principal: "apigateway.amazonaws.com"
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/subjectimg
+
+  # lambda for change isRegister flag in dynamoDB
+  lambdaFunctionForDeleteMosaicList:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: change Mosaic flag in dynamoDB
+      FunctionName: !Sub ${Sysname}-${Env}-delete-mosaic-list-function
+      MemorySize: 128
+      Timeout: 900
+      Role: !GetAtt
+        - LambdaExecutionRole
+        - Arn
+      Code:
+        ImageUri: !Ref DefaultLambdaImage
+      PackageType: Image
+
+  #lambda(for change mosaic flag) permission for api gateway
+  DeleteMosaicListLambdaPermissionForAPIGateway:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref lambdaFunctionForDeleteMosaicList
+      Action: "lambda:InvokeFunction"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPIForGetImgAndList}/*/*/list
 
   ############ Role ############
   ComputeEnvRole:
@@ -988,3 +1000,44 @@ Resources:
           Order: 1
       Priority: 1
       State: "ENABLED"
+
+  ##########ECR########################
+  ECRRepositoryForGetResultImg:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${Sysname}-resultimg-function-ecr-repo
+
+  ECRRepositoryForGetList:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${Sysname}-list-function-ecr-repo
+
+  ECRRepositoryForRegister:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${Sysname}-register-function-ecr-repo
+
+  ECRRepositoryForMosaic:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${Sysname}-mosaic-function-ecr-repo
+
+  ECRRepositoryForGetSabjectList:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${Sysname}-get-sabject-list-function-ecr-repo
+
+  ECRRepositoryForDeleteSabjectList:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${Sysname}-delete-sabject-list-function-ecr-repo
+
+  ECRRepositoryForGetSabjectImg:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${Sysname}-get-sabject-img-function-ecr-repo
+
+  ECRRepositoryForDeleteMosaicList:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${Sysname}-delete-mosaic-list-function-ecr-repo
