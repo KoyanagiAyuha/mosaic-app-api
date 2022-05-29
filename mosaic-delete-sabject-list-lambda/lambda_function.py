@@ -84,7 +84,7 @@ def lambda_handler(event, context):
     eventbody = json.loads(event["body"])
 
     img_id = eventbody["imgId"]
-
+    # ユーザー名/ID
     s3_key = "{}/{}.jpg".format(username, img_id)
     delete_image(s3_key)
     res = delete_recode(username, img_id)
