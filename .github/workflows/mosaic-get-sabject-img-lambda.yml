@@ -9,7 +9,6 @@ on:
 
 env:
   DOCKER_BUILDKIT: "1"
-  AWS_ACCOUNT_ID: "597775291172"
   AWS_DEFAULT_REGION: "eu-central-1"
   FUNCTION_NAME: "mosaic-dev-get-sabject-list-function"
   REPO_NAME: "mosaic-get-sabject-list-function-ecr-repo"
@@ -24,15 +23,15 @@ jobs:
       - uses: actions/setup-python@v1
         with:
           python-version: 3.9
-      - run: aws ecr get-login-password --region ${{ env.AWS_DEFAULT_REGION }} | docker login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com
+      - run: aws ecr get-login-password --region ${{ env.AWS_DEFAULT_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: eu-central-1
-      - run: cd ${{ env.PATHS }} && docker build -t ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.REPO_NAME }}:${{ github.sha }}
-      - run: docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.REPO_NAME }}:${{ github.sha }}
+      - run: cd ${{ env.PATHS }} && docker build -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.REPO_NAME }}:${{ github.sha }}
+      - run: docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.REPO_NAME }}:${{ github.sha }}
       - run: pip3 install awscli
-      - run: aws lambda update-function-code --region ${{ env.AWS_DEFAULT_REGION }} --function-name ${{ env.FUNCTION_NAME }} --image-uri ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.REPO_NAME }}:${{ github.sha }}
+      - run: aws lambda update-function-code --region ${{ env.AWS_DEFAULT_REGION }} --function-name ${{ env.FUNCTION_NAME }} --image-uri ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.REPO_NAME }}:${{ github.sha }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
