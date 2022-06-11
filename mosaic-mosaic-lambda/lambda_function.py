@@ -324,10 +324,10 @@ def lambda_handler(event, context):
         # stringに変更
         now_str = now.isoformat()
 
-        create_record(username, now_str, img_id, img_title, subject_id_list)
+        create_record(username, now_str, img_id, img_title)
 
         try:
-            data = create_mosaic_img(img, username)
+            data = create_mosaic_img(img, username, subject_id_list)
 
             post_image(data, s3_post_key)
 
