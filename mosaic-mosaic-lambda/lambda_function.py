@@ -152,7 +152,7 @@ def failed_record(username, created_at):
 
 
 @log_decorator()
-def create_mosaic_img(img, username):
+def create_mosaic_img(img, username, subject_id_list):
     cv_img = base64_to_cv2(img)
 
     # amazon_rekognition に投げる
@@ -164,11 +164,9 @@ def create_mosaic_img(img, username):
     h, w, ch = cv_img.shape
     result_im = cv_img.copy()
 
-    subject_img_list = get_subject_img(username)
-
     match_list = []
-    for subject_img in subject_img_list:
-        img_name = subject_img['uuid']
+    for img_name in subject_id_list:
+
         key = '{}/{}.jpg'.format(username, img_name)
         is_get_img, sub_img = get_image(key)
         if not is_get_img:
@@ -285,6 +283,18 @@ def post_image(img, key):
     s3_client.put_object(Bucket=EDIT_BUCKET_NAME, Key=key, Body=data)
 
 
+def check_subject(username, subject_id_list):
+    subject_img_list = get_subject_img(username)
+    get_id_list = [i['uuid'] for i in subject_img_list]
+
+    is_subject = True
+    for sub_id in subject_id_list:
+        if sub_id not in get_id_list:
+            is_subject = False
+
+    return is_subject
+
+
 def lambda_handler(event, context):
 
     logger.info(event)
@@ -294,6 +304,7 @@ def lambda_handler(event, context):
 
     img_title = eventbody["imgTitle"]
     img = eventbody['img']
+    subject_id_list = eventbody['subjectId']
 
     # タイムゾーンの生成
     JST = timezone(timedelta(hours=+9), 'JST')
@@ -303,8 +314,9 @@ def lambda_handler(event, context):
 
     # 5未満ならTrue
     is_continue = check_limit(username, now)
+    is_subject = check_subject(username, subject_id_list)
 
-    if is_continue:
+    if is_continue and is_subject:
 
         img_id = str(uuid.uuid4())
         s3_post_key = "{}/{}.jpg".format(username, img_id)
@@ -312,7 +324,7 @@ def lambda_handler(event, context):
         # stringに変更
         now_str = now.isoformat()
 
-        create_record(username, now_str, img_id, img_title)
+        create_record(username, now_str, img_id, img_title, subject_id_list)
 
         try:
             data = create_mosaic_img(img, username)
@@ -336,10 +348,16 @@ def lambda_handler(event, context):
                 'img': ''
             }
 
-    else:
+    elif not is_continue:
         res = {
             'status': 'NG',
             'message': 'Over regulation',
+            'img': ''
+        }
+    else:
+        res = {
+            'status': 'NG',
+            'message': 'undefined subjectId',
             'img': ''
         }
 
