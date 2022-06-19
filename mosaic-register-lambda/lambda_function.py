@@ -121,7 +121,8 @@ def lambda_handler(event, context):
 
         res = {
             'status': 'OK',
-            'message': 'Registered successfully'
+            'message': 'Registered successfully',
+            'uuid': img_id
         }
 
     else:
